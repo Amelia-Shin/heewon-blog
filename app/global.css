@@ -1,4 +1,6 @@
-@import 'tailwindcss';
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
 
 ::selection {
   background-color: #47a3f3;
@@ -15,6 +17,8 @@
   --sh-jsxliterals: #6266d1;
   --sh-property: #e25a1c;
   --sh-entity: #e25a1c;
+  --color-bg: white;
+  --color-text: black;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -23,14 +27,24 @@
     --sh-identifier: white;
     --sh-keyword: #f47067;
     --sh-string: #0fa295;
+    --color-bg: white;
+    --color-text: black;
   }
-  html {
-    color-scheme: dark;
+  .dark {
+    --color-bg: #0a0a0a;
+    --color-text: #f9fafb;
   }
 }
 
 html {
   min-width: 360px;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+}
+
+.dark {
+  --color-bg: #0a0a0a;
+  --color-text: #f9fafb;
 }
 
 .prose .anchor {
@@ -53,7 +67,7 @@ html {
 
 .prose .anchor:after {
   @apply text-neutral-300 dark:text-neutral-700;
-  content: '#';
+  content: "#";
 }
 
 .prose *:hover > .anchor {
@@ -131,8 +145,8 @@ pre {
 }
 
 /* Remove Safari input shadow on mobile */
-input[type='text'],
-input[type='email'] {
+input[type="text"],
+input[type="email"] {
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
