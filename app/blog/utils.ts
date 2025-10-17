@@ -1,11 +1,21 @@
 import fs from "fs";
 import path from "path";
+import { fetchVelogPosts, convertVelogPostToLocalFormat } from "./velog";
 
 type Metadata = {
   title: string;
   publishedAt: string;
   summary: string;
   image?: string;
+};
+
+export type BlogPost = {
+  metadata: Metadata;
+  slug: string;
+  content: string;
+  isVelogPost?: boolean;
+  velogUrl?: string;
+  tags?: string[];
 };
 
 function parseFrontmatter(fileContent: string) {
@@ -49,8 +59,25 @@ function getMDXData(dir) {
   });
 }
 
-export function getBlogPosts() {
-  return getMDXData(path.join(process.cwd(), "posts"));
+export async function getBlogPosts(): Promise<BlogPost[]> {
+  // Get local MDX posts
+  const localPosts = getMDXData(path.join(process.cwd(), "posts"));
+
+  // Get Velog posts if username is configured
+  const velogUsername = process.env.VELOG_USERNAME;
+  let velogPosts: BlogPost[] = [];
+
+  if (velogUsername) {
+    try {
+      const rawVelogPosts = await fetchVelogPosts(velogUsername, 20);
+      velogPosts = rawVelogPosts.map(convertVelogPostToLocalFormat);
+    } catch (error) {
+      console.error("Failed to fetch Velog posts:", error);
+    }
+  }
+
+  // Combine and return all posts
+  return [...localPosts, ...velogPosts];
 }
 
 export function formatDate(date: string, includeRelative = false) {

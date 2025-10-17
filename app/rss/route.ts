@@ -4,7 +4,9 @@ import { getBlogPosts } from 'app/blog/utils'
 export async function GET() {
   let allBlogs = await getBlogPosts()
 
+  // Only include local posts in RSS feed
   const itemsXml = allBlogs
+    .filter((post) => !post.isVelogPost)
     .sort((a, b) => {
       if (new Date(a.metadata.publishedAt) > new Date(b.metadata.publishedAt)) {
         return -1
