@@ -1,0 +1,393 @@
+---
+title: "[React.js] useSyncExternalStore"
+publishedAt: 2025-07-23T19:21:45.448Z
+summary: "useSyncExternalStore는 React 18에서 도입된 외부 저장소(state)의 변화를 React 컴포넌트에서 정확하고 일관성 있게 구독하기 위해 만든 훅이다.외부 상태와 React 렌더링 사이의 시점을 정확히 동기화해서,버그 없이 일관된 UI를 만들 수 "
+image: https://velog.velcdn.com/images/hee0ne_2/post/327c4671-b7c2-495f-bbd3-5a0d3d957bcb/image.webp
+tags: ["React"]
+velogUrl: https://velog.io/@hee0ne_2/React.js-useSyncExternalStore
+---
+
+# 💡 useSyncExternalStore 란?
+`useSyncExternalStore`는 React 18에서 도입된 **외부 저장소(state)**의 변화를 React 컴포넌트에서 정확하고 일관성 있게 구독하기 위해 만든 훅이다.
+## 핵심 목적
+외부 상태와 React 렌더링 사이의 시점을 정확히 동기화해서,
+버그 없이 일관된 UI를 만들 수 있도록 해주기 위함.
+
+Redux, Zustand, 전역 event 기반 store 등에서 사용할 수 있다.
+
+# 🧨 왜 useSyncExternalStore가 필요했는가?
+## ⚠️ 기존 방식의 문제: useEffect + useState
+기존에는 외부 상태(store)를 React 컴포넌트에서 사용하려면 이런 방식으로 처리했다.
+
+```tsx
+const [value, setValue] = useState(store.getValue());
+
+useEffect(() => {
+  const unsubscribe = store.subscribe(() => {
+    setValue(store.getValue());
+  });
+  return unsubscribe;
+}, []);
+```
+겉보기에는 잘 동작하는 것 같지만...
+React 18에서는 렌더 도중 외부 상태가 바뀔 경우, 렌더링이 취소되거나 다시 시작될 수 있는데, 이 과정에서 useEffect는 렌더 이후 동작하기 때문에 중간 상태 오류가 발생할 수 있다.
+
+### 😱 실제 문제점들
+#### 1. 렌더 시점과 구독 시점의 불일치
+useEffect는 렌더링 이후에 실행됨.
+
+하지만 외부 상태는 그 전에 바뀌었을 수도 있음.
+
+그럼 render → subscribe → value 변경 순이 되면, 초기 렌더에서 잘못된 값이 표시될 수 있음.
+
+즉, 렌더링 시점에 스냅샷을 잡지 못해서 UI가 이전 값을 보여주거나 깜빡임이 생김.
+
+#### 2. Concurrent Mode에서의 부작용
+React 18 이후, Concurrent Rendering이 활성화됨에 따라 다음 문제가 중요해졌다.
+> **Concurrent Rendering**이란 ? 
+React가 여러 개의 UI 작업을 병렬로 처리하고, 사용자 경험에 더 좋은 작업을 먼저 렌더링할 수 있도록 만든 렌더링 방식
+
+- React는 여러 번의 렌더를 미리 예약하고 나중에 커밋함.
+
+- 그런데 그 사이에 외부 상태가 바뀌면, 예상과 다른 값이 렌더에 반영될 수 있음.
+
+즉, 렌더링 도중 외부 값이 바뀌었는지 React가 알 수 없어 버그가 생김.
+
+**🛠️ 그래서 만들어진 useSyncExternalStore
+이러한 문제를 해결하기 위해 useSyncExternalStore를 도입했다.**
+
+
+## 📌 정리하면
+>`useSyncExternalStore`는
+외부 상태를 React 렌더링 흐름 안에서 일관되고 안전하게 사용하는 유일한 방법이다.
+이는 React가 Concurrent Rendering과 SSR(Server Side Rendering)을 완전히 지원하게 된 중요한 기반 중 하나이다.
+
+
+# 🔍 기본 사용법
+```tsx
+const state = useSyncExternalStore(subscribe, getSnapshot);
+```
+📘 파라미터 설명 
+
+| 인자              | 설명                                                                 |
+|------------------|----------------------------------------------------------------------|
+| `subscribe`       | 스토어 변경을 구독하는 함수. 변경이 발생하면 컴포넌트를 다시 렌더링함     |
+| `getSnapshot`     | 현재 스토어의 상태를 반환하는 함수 (렌더링 시 호출됨)                      |
+| `getServerSnapshot` *(선택)* | 서버 렌더링에서 사용할 상태 반환 함수 (SSR 시 필요)           |
+
+
+### 🚀 useSyncExternalStore 사용법: 4가지 실전 패턴 정리
+다음은 실무에서 자주 사용되는 4가지 유형의 사용법입니다. 
+** React 공식 문서 참고
+
+#### 1️⃣ 외부 Store 구독 (예: Redux, Zustand 등)
+✅ 목적
+외부 상태 관리 라이브러리(Redux, Zustand 등)의 변경 사항을 안전하게 구독하기.
+
+🧩 사용법
+```tsx
+import { useSyncExternalStore } from 'react';
+import { todosStore } from './todoStore.js';
+
+function TodosApp() {
+  const todos = useSyncExternalStore(todosStore.subscribe, todosStore.getSnapshot);
+  // ...
+}
+```
+store에 있는 데이터의 snapshot을 반환합니다. 두 개의 함수를 인수로 전달해야 합니다.
+
+subscribe 함수는 store에 구독하고 구독을 취소하는 함수를 반환해야 합니다.
+getSnapshot 함수 함수는 store에서 데이터의 스냅샷을 읽어야 합니다.
+
+💡```snapshot``` : 지금 이 순간의 외부 상태값
+
+React는 이 함수를 사용해 컴포넌트를 store에 구독한 상태로 유지하고 변경 사항이 있을 때 리렌더링합니다.
+
+
+#### 2️⃣ 브라우저 API 구독 (예: window, location 등)
+✅ 목적
+window, matchMedia, geolocation 등의 브라우저 상태를 추적하고 반응형 UI 구성
+
+🧩 사용법
+```tsx
+import { useSyncExternalStore } from 'react';
+
+function ChatIndicator() {
+  const isOnline = useSyncExternalStore(subscribe, getSnapshot);
+  // ...
+}
+```
+getSnapshot 함수를 구현하려면 브라우저 API에서 현재 값을 읽습니다.
+```tsx
+function getSnapshot() {
+  return navigator.onLine;
+}
+```
+subscribe 함수를 구현
+```tsx
+function subscribe(callback) {
+  window.addEventListener('online', callback);
+  window.addEventListener('offline', callback);
+  return () => {
+    window.removeEventListener('online', callback);
+    window.removeEventListener('offline', callback);
+  };
+}
+```
+
+#### 3️⃣ Custom Hook으로 로직 추출하기
+✅ 목적
+공통 로직을 재사용 가능한 Hook으로 분리해서 여러 컴포넌트에서 활용하기
+
+🧩 사용법
+이 custom useOnlineStatus Hook은 네트워크가 온라인 상태인지 여부를 추적
+
+**useOnlineStatus.js**
+```tsx
+import { useSyncExternalStore } from 'react';
+
+export function useOnlineStatus() {
+  const isOnline = useSyncExternalStore(subscribe, getSnapshot);
+  return isOnline;
+}
+
+function getSnapshot() {
+  return navigator.onLine;
+}
+
+function subscribe(callback) {
+  window.addEventListener('online', callback);
+  window.addEventListener('offline', callback);
+  return () => {
+    window.removeEventListener('online', callback);
+    window.removeEventListener('offline', callback);
+  };
+}
+```
+
+**app.js**
+```tsx
+import { useOnlineStatus } from './useOnlineStatus.js';
+
+function StatusBar() {
+  const isOnline = useOnlineStatus();
+  return <h1>{isOnline ? '✅ Online' : '❌ Disconnected'}</h1>;
+}
+
+function SaveButton() {
+  const isOnline = useOnlineStatus();
+
+  function handleSaveClick() {
+    console.log('✅ Progress saved');
+  }
+
+  return (
+    <button disabled={!isOnline} onClick={handleSaveClick}>
+      {isOnline ? 'Save progress' : 'Reconnecting...'}
+    </button>
+  );
+}
+
+export default function App() {
+  return (
+    <>
+      <SaveButton />
+      <StatusBar />
+    </>
+  );
+}
+```
+📌 이처럼 커스텀 훅으로 추출하면 테스트와 유지보수가 쉬워진다.
+
+#### 4️⃣ 서버 렌더링(SSR) 지원 추가
+✅ 목적
+서버 렌더링 시 window, document 접근 오류 방지 및 초기 값 제공
+
+🌐 예: useWindowWidth에 SSR 대응 추가
+```tsx
+function useWindowWidth() {
+  const subscribe = (callback: () => void) => {
+    window.addEventListener("resize", callback);
+    return () => window.removeEventListener("resize", callback);
+  };
+
+  const getSnapshot = () => window.innerWidth;
+
+  const getServerSnapshot = () => 1024; // SSR 시 기본값
+
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+}
+```
+☑️ getServerSnapshot은 선택적 인자지만, SSR 환경에서는 필수!
+💡 이 패턴은 Next.js, Remix 등 SSR 프레임워크를 사용할 때 매우 유용!
+
+
+## 📖 실제 연동 예제 모음
+
+### ✅ 1. Zustand와 useSyncExternalStore 연동하기
+Zustand는 자체적으로 subscribe, getState 메서드를 제공하기 때문에 쉽게 연동 가능하다.
+
+```tsx
+// 📁 store.ts
+import { createStore } from 'zustand/vanilla';
+
+export const counterStore = createStore(() => ({
+  count: 0,
+  increase: () => counterStore.setState((s) => ({ count: s.count + 1 })),
+}));
+```
+```tsx
+// 📁 useCounter.ts
+import { useSyncExternalStore } from "react";
+import { counterStore } from "./store";
+
+export function useCounter() {
+  return useSyncExternalStore(
+    counterStore.subscribe,
+    counterStore.getState
+  );
+}
+```
+```tsx
+// 📁 Counter.tsx
+import { useCounter } from "./useCounter";
+
+export default function Counter() {
+  const { count, increase } = useCounter();
+  return (
+    <div>
+      <p>🧮 Count: {count}</p>
+      <button onClick={increase}>+ 증가</button>
+    </div>
+  );
+}
+```
+>🧠 zustand/vanilla는 훅을 직접 만들고 싶을 때 사용한다.
+React 전용 useStore 훅을 안 쓰고 useSyncExternalStore로 직접 구현하는 예제
+
+### ✅ 2. Redux와 useSyncExternalStore 연동하기
+Redux도 store.subscribe와 store.getState를 그대로 활용 가능하다.
+
+```tsx
+// 📁 store.ts
+import { legacy_createStore } from "redux";
+
+const initialState = { count: 0 };
+
+function reducer(state = initialState, action: any) {
+  switch (action.type) {
+    case "INCREMENT":
+      return { count: state.count + 1 };
+    default:
+      return state;
+  }
+}
+
+export const store = legacy_createStore(reducer);
+```
+
+```tsx
+// 📁 useReduxSelector.ts
+import { useSyncExternalStore } from "react";
+import { store } from "./store";
+
+export function useReduxSelector<T>(selector: (state: any) => T): T {
+  return useSyncExternalStore(
+    store.subscribe,
+    () => selector(store.getState())
+  );
+}
+```
+```tsx
+// 📁 Counter.tsx
+import { store } from "./store";
+import { useReduxSelector } from "./useReduxSelector";
+
+export default function Counter() {
+  const count = useReduxSelector((state) => state.count);
+
+  return (
+    <div>
+      <p>🧮 Redux Count: {count}</p>
+      <button onClick={() => store.dispatch({ type: "INCREMENT" })}>+ 증가</button>
+    </div>
+  );
+}
+```
+>📌 이 방식은 React-Redux의 useSelector를 직접 대체하거나, 고도화된 커스텀 훅으로 활용할 수 있다.
+
+### ✅ 3. 브라우저 API (예: matchMedia) 구독 예제
+미디어 쿼리를 반응형으로 다루고 싶을 때 활용합니다.
+
+```tsx
+// 📁 useMediaQuery.ts
+export function useMediaQuery(query: string): boolean {
+  const subscribe = (callback: () => void) => {
+    const media = window.matchMedia(query);
+    media.addEventListener("change", callback);
+    return () => media.removeEventListener("change", callback);
+  };
+
+  const getSnapshot = () => window.matchMedia(query).matches;
+  const getServerSnapshot = () => false; // SSR 대비
+
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+}
+```
+```tsx
+// 📁 Component.tsx
+import { useMediaQuery } from "./useMediaQuery";
+
+export default function ResponsiveBox() {
+  const isMobile = useMediaQuery("(max-width: 768px)");
+
+  return <div>{isMobile ? "📱 모바일 화면" : "🖥️ 데스크탑 화면"}</div>;
+}
+```
+>💡 기존 useEffect + useState 방식보다 훨씬 간결하고, SSR에서도 안전하게 작동한다.
+
+### ✅ 4. 서버 렌더링(SSR) 대응 예제 (with Next.js)
+```tsx
+// 📁 useWindowWidth.ts
+export function useWindowWidth(): number {
+  const getSnapshot = () => window.innerWidth;
+  const getServerSnapshot = () => 1024; // 서버 기본값 (예: 데스크탑)
+
+  const subscribe = (callback: () => void) => {
+    window.addEventListener("resize", callback);
+    return () => window.removeEventListener("resize", callback);
+  };
+
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+}
+```
+```tsx
+// 📁 Home.tsx (Next.js page)
+import { useWindowWidth } from "./useWindowWidth";
+
+export default function Home() {
+  const width = useWindowWidth();
+
+  return (
+    <main>
+      <h1>현재 창 너비: {width}px</h1>
+    </main>
+  );
+}
+```
+>✅ Next.js 같은 SSR 환경에서는 반드시 getServerSnapshot을 넣어야 window 에러 없이 렌더링된다.
+
+
+# 📖 참고문서
+
+React 공식 문서
+>https://ko.react.dev/reference/react/useSyncExternalStore#subscribing-to-a-browser-api
+
+티어링 이슈 알아보기 & 외부 상태 관리 라이브러리 구현 예시
+>https://ted-projects.com/react-use-sync-external-store
+
+useSyncExternalStore 훅 보기 전에 먼저 알면 좋은 개념들
+>https://velog.io/@yeonoey/useSyncExternalStore%EB%9D%BC%EB%8A%94-%ED%9B%85%EC%9D%84-%EC%95%84%EC%8B%9C%EB%82%98%EC%9A%94#usesyncexternalstore
+
+하늘님이 작성해주신 useSyncExternalStore 포스트 인데, 설명이 이해하기 쉽게 잘 되어있다.
+>https://velog.io/@eveneul/React.js-useSyncExternalStore%EB%9E%80-%EA%B7%B8%EB%A6%AC%EA%B3%A0-Zustand%EC%97%90%EC%84%9C-useSyncExternalStore%EB%A5%BC-%ED%99%9C%EC%9A%A9%ED%95%98%EB%8A%94-%EB%B0%A9%EC%8B%9D#-zustand-%EC%A0%84%EC%B2%B4-%ED%94%8C%EB%A1%9C%EC%9A%B0

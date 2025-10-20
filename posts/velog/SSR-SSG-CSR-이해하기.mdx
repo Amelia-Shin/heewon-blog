@@ -1,0 +1,113 @@
+---
+title: "SSR, SSG, CSR 이해하기"
+publishedAt: 2025-09-18T06:08:45.255Z
+summary: "SPA(Single Page Application) 시대를 연 대표적인 방식입니다.처음에는 빈 HTML만 내려주고, 브라우저가 큰 JS 번들을 받아와 DOM을 생성합니다.✅ 장점: 페이지 이동이 빠르고 동적인 UX 구현에 강함❌ 단점: 초기 로딩 속도가 느리고 SEO에"
+image: https://velog.velcdn.com/images/hee0ne_2/post/0f0488d3-42b7-4e6c-bdf3-813eb805c117/image.png
+tags: ["CSR","SSR","hydration","nextjs","ssg"]
+velogUrl: https://velog.io/@hee0ne_2/SSR-SSG-CSR-이해하기
+---
+
+# CSR (클라이언트 사이드 렌더링)
+![](https://velog.velcdn.com/images/hee0ne_2/post/9dd75e96-036d-4e43-88c4-6a59403e7685/image.png)
+
+SPA(Single Page Application) 시대를 연 대표적인 방식입니다.
+처음에는 빈 HTML만 내려주고, 브라우저가 큰 JS 번들을 받아와 DOM을 생성합니다.
+
+✅ 장점: 페이지 이동이 빠르고 동적인 UX 구현에 강함
+❌ 단점: 초기 로딩 속도가 느리고 SEO에 약함
+
+## CSR 보완 기술
+
+CSR의 한계를 보완하기 위해 등장한 기법들입니다.
+
+Code Splitting / Tree Shaking → JS 번들을 쪼개고 불필요한 코드 제거
+
+Pre-rendering → 특정 페이지는 HTML을 미리 만들어 SEO 보완
+
+하지만 이 방식만으로는 SEO와 초기 로딩 문제를 완전히 해결할 수 없었습니다.
+
+# SSR (서버 사이드 렌더링)
+![](https://velog.velcdn.com/images/hee0ne_2/post/b4123f70-c3fb-41a0-bb28-258704f019de/image.png)
+
+서버에서 HTML을 만들어 보내주는 방식입니다.
+첫 화면을 빠르게 보여주고 SEO에도 강점이 있습니다.
+
+✅ 장점: 초기 로딩 빠름, SEO 최적화 가능
+❌ 단점: 페이지 이동 시 새로고침, 서버 부하 증가
+
+# SSG (정적 사이트 생성)
+
+빌드 시점에 HTML을 미리 생성해두는 방식입니다. CDN에 올려두면 아주 빠릅니다.
+
+✅ 장점: 속도, SEO 모두 강력 / 서버 부하 없음
+❌ 단점: 데이터가 자주 바뀌는 페이지에는 부적합
+
+
+그런데 문제는…
+
+SSR이나 SSG를 쓰면 완성된 HTML을 처음부터 내려주니까, CSR의 단점(빈 화면, SEO 문제)을 극복할 수 있습니다.
+하지만 여기서 새로운 문제가 생깁니다.
+
+HTML은 보이는데, 이벤트가 안 먹힌다?
+
+SSR/SSG로 렌더링된 페이지는 단순히 정적인 HTML일 뿐입니다.
+클릭 이벤트, 상태 관리, 동적 UI 같은 JS 로직은 아직 살아있지 않음 → 이걸 연결해주는 과정이 필요합니다.
+
+# Hydration: 왜 필요할까?
+
+여기서 등장한 개념이 **Hydration(하이드레이션)**입니다.
+
+SSR/SSG로 미리 만든 HTML을 브라우저가 받아옴
+
+이후 JS 번들을 다운로드 → 기존 HTML에 이벤트 핸들러와 상태를 주입
+
+이렇게 해서 화면이 정적 HTML → 동적인 SPA로 변신
+
+즉, Hydration은 HTML과 JS를 “결합”하는 과정이라고 이해하면 쉽습니다.
+
+✅ Hydration의 장점
+
+- SSR/SSG의 장점(빠른 초기 로딩, SEO)을 유지
+
+- CSR의 장점(인터랙티브 UI)도 살릴 수 있음
+
+❌ 한계
+
+- Hydration 과정에서 JS 번들을 전부 다시 실행하기 때문에, 규모가 커질수록 느려짐
+
+그래서 최근에는 Partial Hydration, Streaming, Islands Architecture 같은 개선 기법들이 연구되고 있음
+
+# 언제 어떤 방식을 써야 할까?
+
+![](https://velog.velcdn.com/images/hee0ne_2/post/c129b1a5-5165-4080-90fb-375d86496865/image.png)
+
+CSR → 대시보드, 내부 툴 (SEO 중요하지 않음, 사용자 상호작용 많음)
+
+SSR → 뉴스, 쇼핑몰 (빠른 초기 로딩 + SEO 필요)
+
+SSG → 블로그, 문서 사이트 (변경이 적고, 빠른 서비스가 핵심)
+
+SSR/SSG + Hydration → 대부분의 현대 웹앱 (SEO + UX + 동적 UI 모두 필요)
+
+## CSR, SSR, SSG and ISR 시각화 비교
+![](https://velog.velcdn.com/images/hee0ne_2/post/e9e7d851-539b-4c9c-bbe0-e7325223e4bd/image.png)
+
+
+# 정리
+
+CSR은 SPA 시대를 열었지만 초기 로딩과 SEO에 약했다.
+
+이를 보완하기 위해 SSR/SSG가 등장했다.
+
+하지만 SSR/SSG만으로는 동적인 UI가 안 되기 때문에, Hydration이 필요해졌다.
+
+요즘은 Next.js, Nuxt.js 같은 프레임워크에서 CSR + SSR/SSG + Hydration을 조합해 상황에 맞게 쓰는 것이 일반적임
+
+
+## 참고 사이트
+
+<a href='https://velog.io/@ka0son/%EB%A0%8C%EB%8D%94%EB%A7%81-%EC%82%BC%ED%98%95%EC%A0%9C-CSR-SSR-SSG-%EC%9D%B4%ED%95%B4%ED%95%98%EA%B8%B0#%EA%B7%B8%EB%A0%87%EB%8B%A4%EB%A9%B4-%EB%AC%B4%EC%97%87%EC%9D%84-%EC%82%AC%EC%9A%A9%ED%95%B4%EC%95%BC%ED%95%98%EB%8A%94%EA%B0%80'>렌더링 삼형제 CSR, SSR, SSG 이해하기</a>
+
+<a href='https://www.elancer.co.kr/blog/detail/263'>SSR을 사용할 수 밖에 없는 이유 (Feat. CSR과의 차이)</a>
+
+<a href='https://sonblog.vercel.app/blogs/blog/nextjs/csr-ssg-isr-ssr'>CSR, SSG, ISR, SSR</a>

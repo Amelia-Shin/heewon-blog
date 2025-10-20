@@ -1,0 +1,144 @@
+---
+title: "[5주차 회고] 디자인 패턴과 함수형 프로그래밍"
+publishedAt: 2025-09-15T01:45:46.454Z
+summary: "이번 주 주제 📖\n과제의 핵심취지\nReact의 hook 이해하기\n함수형 프로그래밍에 대한 이해\n액션과 순수함수의 분리\n\n배운 내용 정리 📚\n\n이번 주차는 React Hook에 대해 깊이 있게 학습하고, 함수형 프로그래밍의 핵심 개념들을 실제 코드로 구현해보는 시간이"
+image: https://velog.velcdn.com/images/hee0ne_2/post/79e62981-686f-4890-86cd-66da5e4986d1/image.png
+tags: ["CustomHook","React","항해99","항해플러스"]
+velogUrl: https://velog.io/@hee0ne_2/5주차-회고-디자인-패턴과-함수형-프로그래밍
+---
+
+## 이번 주 주제 📖
+### 과제의 핵심취지
+- React의 hook 이해하기
+- 함수형 프로그래밍에 대한 이해
+- 액션과 순수함수의 분리
+
+## 배운 내용 정리 📚
+
+이번 주차는 React Hook에 대해 깊이 있게 학습하고, 함수형 프로그래밍의 핵심 개념들을 실제 코드로 구현해보는 시간이었다. 특히 상태 관리와 컴포넌트 설계에서 많은 고민과 배움이 있었다.
+
+### 주요 학습 포인트
+
+**상태 추상화와 Hook 설계**
+- Jotai atoms에서 커스텀 hooks로의 전환
+- 컴포넌트와 훅의 계층 분리
+- 재사용 가능한 훅 인터페이스 설계
+
+**도메인 기반 모듈화**
+- Product, Cart, Coupon 도메인별 폴더 구조
+- 높은 응집도, 낮은 결합도를 위한 컴포넌트 분리
+- UI와 도메인 로직의 책임 분리
+
+**전역 상태 관리**
+- localStorage와 React State 동기화 패턴 구현
+- Notification API 설계와 상태 관리
+- 테스트 격리를 위한 Jotai Provider 활용
+
+## 어려웠던 점 🤯
+
+### 1. 커스텀 훅 상태 공유 실수
+
+Props drilling을 피하려다가 큰 함정에 빠졌다. 하위 컴포넌트에서 같은 커스텀 훅을 다시 호출하면 상태가 공유될 거라 생각했는데, 완전히 독립적인 상태가 생성되었다.
+
+```javascript
+function ParentComponent() {
+  const { addNotification } = useNotification();
+  
+  addNotification('성공');
+  return (
+    <div>
+      <ChildComponent />  {/* props로 전달하지 않음 */}
+    </div>
+  );
+}
+
+function ChildComponent() {
+  const { addNotification } = useNotification(); // 같은 훅을 다시 선언
+  // 하지만 Parent의 상태와는 완전히 분리됨!
+}
+```
+
+이 실수를 2번이나 반복하면서 깨달았다: **커스텀 훅은 로직 재사용을 위한 도구이지, 상태를 공유하는 것이 아니다.** 각 호출마다 새로운 상태 인스턴스가 생성된다는 React Hook의 기본 원칙을 체감했다.
+
+### 2. localStorage와 React State 동기화 딜레마
+
+두 개의 독립적인 상태 저장소를 동기화하는 과정에서 많은 고민이 있었다:
+- React state: 컴포넌트 생명주기에 따라 생성/소멸
+- localStorage: 브라우저 세션을 넘어 영구 지속
+
+처음 접근한 방식은 useEffect를 통한 단방향 동기화였다:
+
+```javascript
+const [value, setValue] = useState(() => {
+  const saved = localStorage.getItem(key);
+  return saved ? JSON.parse(saved) : initialValue;
+});
+
+useEffect(() => {
+  localStorage.setItem(key, JSON.stringify(value));
+}, [value, key]);
+```
+
+하지만 이 방법은 상태 업데이트 시점에서 일관성 문제가 발생했다. 팀원들과의 코드 공유를 통해 **Single Source of Truth** 패턴을 적용한 해결책을 찾을 수 있었다:
+
+```javascript
+const setValue = (value: T | ((val: T) => T)) => {
+  setStoredValue((prev) => {
+    const newValue =
+      typeof value === "function" ? (value as (val: T) => T)(prev) : value;
+
+    if (
+      newValue === undefined ||
+      (Array.isArray(newValue) && newValue.length === 0)
+    ) {
+      localStorage.removeItem(key);
+    } else {
+      localStorage.setItem(key, JSON.stringify(newValue));
+    }
+
+    return newValue;
+  });
+};
+```
+
+핵심 차이점은 실행 시점이었다:
+- **이전**: React state 업데이트 → 렌더링 → useEffect 실행
+- **개선**: localStorage 저장 → React state 업데이트 (동기)
+
+## 깨달은 점 💡
+
+### 학습의 본질 되돌아보기
+
+4주차에 바이브코딩을 하면서 큰 현타가 왔었다. AI에게 의존하면서 테스트 통과만을 목표로 하다 보니, "내가 뭘 하고 있는 거지?"라는 생각이 들었다. 교육의 진짜 목적은 **스스로 배워가는 것**인데, 언제부터 테스트 통과가 최우선이 되었을까?
+
+5주차에서는 다시 초심으로 돌아가 AI 도움을 최소화하고, 팀원들과의 코드 리뷰와 페어코딩을 통해 하나씩 부딪혀가며 배웠다. 처음엔 내 질문이 상대방의 시간을 빼앗는다고 생각했지만, 오히려 서로 설명하고 토론하면서 **win-win 관계**가 형성되었다.
+
+### 컴포넌트 설계에 대한 고민
+
+이번 과제에서 가장 신경 쓴 부분은 컴포넌트 분리였다:
+- UI와 Hooks의 분리
+- 도메인별 컴포넌트 구조 (Product, Cart, Coupon)
+- **낮은 결합도, 높은 응집도**를 지키기 위한 설계
+
+"더 세세하게 나누는 게 좋을까? (ProductImg, ProductDiscount, ProductPrice 등) 아니면 큼직하게 나누는 게 좋을까? (ProductCard < ProductList)"라는 고민이 계속 있었다. 결국 재사용성과 유지보수성을 기준으로 판단해야 한다는 걸 배웠다.
+
+### Hook의 진정한 의미
+
+커스텀 훅을 직접 설계하면서 깨달은 것:
+- 훅은 단순한 로직 재사용 도구가 아니라, **상태와 부수효과를 캡슐화하는 강력한 추상화 도구**
+- 훅의 public API 설계가 전체 애플리케이션의 결합도를 좌우함
+- 전역 상태의 '소유자'를 명확히 하는 것의 중요성
+
+## 아쉬운 점과 다음 목표 🎯
+
+원래 목표는 몰랐던 부분을 천천히 학습하며 과제를 진행하는 것이었다. 그러나 진도가 늦어지면서 제출일이 다가올수록 테스트 통과에만 집중하게 되었다.
+
+다른 사람의 PR을 참고하거나 AI를 활용하면서 스스로 고민할 기회가 줄어든 점이 아쉬웠다.
+
+더 많은 시간을 투자하여 온전히 내 힘으로 과제를 진행했다면 더 깊은 배움과 성장이 있었을 것이다. 클린코드 과제에서는 특히 이런 아쉬움이 크게 남았다.
+
+다음에는 반드시 스스로 생각하며 내 힘으로만 과제를 완성하는 것을 목표로 한다. 그렇게 해야 진정으로 내 것이 될 수 있다.
+
+---
+
+*이번 주는 비록 완벽하지 않았지만, 팀원들과 함께 학습하는 즐거움을 다시 느낄 수 있었다. 다음 주차에서도 더 많은 페어코딩과 협업을 통해 성장하고 싶다!*

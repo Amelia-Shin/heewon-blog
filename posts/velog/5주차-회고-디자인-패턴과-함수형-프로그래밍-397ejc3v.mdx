@@ -1,0 +1,202 @@
+---
+title: "[6주차 회고] 관심사 분리와 폴더구조"
+publishedAt: 2025-09-15T02:35:24.623Z
+summary: "이번 주 주제\n클린코드 원칙과 리액트 컴포넌트 리팩토링\n회사에서 업무를 하면서 항상 내가 짠 코드에 대해 생각을 했다.\n더 가독성 있게 짤 수는 없을까? 성능을 더 높일 수 있는 코드를 작성할 수 있지 않을까?\n내 코드에 대해 리뷰를 받을 수 있는 환경도 아니었고, 더"
+image: https://velog.velcdn.com/images/hee0ne_2/post/f31d56ae-080b-485b-9efe-cd42059c8f40/image.png
+tags: ["fsd","항해99","항해플러스"]
+velogUrl: https://velog.io/@hee0ne_2/5주차-회고-디자인-패턴과-함수형-프로그래밍-397ejc3v
+---
+
+## 이번 주 주제 📖
+### 과제의 핵심취지
+목표 : 전역상태관리를 이용한 적절한 분리와 계층에 대한 이해를 통한 FSD 폴더 구조 적용하기
+- 전역상태관리를 사용해서 상태를 분리하고 관리하는 방법에 대한 이해
+- Context API, Jotai, Zustand 등 상태관리 라이브러리 사용하기
+- FSD(Feature-Sliced Design)에 대한 이해
+- FSD를 통한 관심사의 분리에 대한 이해
+- 단일책임과 역할이란 무엇인가?
+- 관심사를 하나만 가지고 있는가?
+- 어디에 무엇을 넣어야 하는가?
+- TanstackQuery의 사용법에 대한 이해
+- TanstackQuery를 이용한 비동기 코드 작성에 대한 이해
+- 비동기 코드를 선언적인 함수형 프로그래밍으로 작성하는 방법에 대한 이해
+
+## 배운 내용 정리 📚
+
+### FSD 아키텍쳐
+FSD가 생각보다 어렵지 않았다
+![](https://velog.velcdn.com/images/hee0ne_2/post/d9fde1ee-c799-4520-98f9-709497659d48/image.png)
+
+처음 FSD 폴더 구조를 봤을 때는 정말 복잡해 보였다.`entities`, `features`, `widgets` 같은 용어들이 생소했고, 파일을 이렇게까지 세분화해서 나눠야 하나 싶었다. 하지만 실제로 적용해보니 생각이 완전히 바뀌었다.
+가장 인상 깊었던 건 **"엔티티는 정보, 피처는 행동"**이라는 개념이었다. 
+댓글 기능을 예로 들면:
+```typescript
+// entities/comment/model/types.ts - 댓글이 "무엇"인지 정의
+export interface Comment {
+  id: number
+  content: string
+  author: string
+}
+
+// features/comment/add-comment/hooks.ts - 댓글을 "어떻게" 추가하는지
+export const useAddComment = () => {
+  return useMutation({
+    mutationFn: (commentData) => CommentAPI.createComment(commentData)
+  })
+}
+
+// widgets/comment-list/CommentList.tsx - 댓글을 "어떻게" 보여줄지
+export const CommentList = () => {
+  return <div>{/* 댓글 목록 UI */}</div>
+}
+```
+이제는 댓글 관련 수정이 필요하면 features/comment 폴더만 들여다보면 된다. 
+
+### Tanstack Query
+TanStack Query의 간결함에 놀랐다
+useState와 useEffect로 API 상태를 관리하던 기존 방식이 얼마나 번거로웠는지 새삼 깨달았다.
+```javascript
+// 기존에 이렇게 복잡하게 작성하던 걸...
+const [posts, setPosts] = useState([])
+const [loading, setLoading] = useState(false)
+const [error, setError] = useState(null)
+
+useEffect(() => {
+  setLoading(true)
+  fetch('/api/posts')
+    .then(res => res.json())
+    .then(data => setPosts(data))
+    .catch(err => setError(err))
+    .finally(() => setLoading(false))
+}, [])
+
+// 이렇게 간단하게!
+const { data: posts, isLoading, error } = useQuery({
+  queryKey: ['posts'],
+  queryFn: () => fetch('/api/posts').then(res => res.json())
+})
+```
+특히 낙관적 업데이트가 진짜 게임 체인저였다. 사용자가 댓글을 작성하면 서버 응답을 기다리지 않고 바로 화면에 표시되니까 체감 속도가 확실히 빨라졌다. queryClient.setQueryData로 캐시를 직접 조작할 수 있다는 점도 신기했다.
+
+### Zustand 상태 관리
+Zustand로 다이얼로그 지옥에서 탈출
+이번 과제에서 가장 공들인 부분이 바로 다이얼로그 상태 관리였다. 처음에는 각 컴포넌트마다 useState로 다이얼로그를 열고 닫았는데, 이게 진짜 문제였다. 게시물 추가 다이얼로그와 댓글 추가 다이얼로그가 동시에 열리거나, 하나를 닫았는데 다른 곳에서는 여전히 열려있다고 인식하는 상황이 발생했다.
+
+```typescript
+// 해결책: 모든 다이얼로그 상태를 중앙에서 관리
+export const useDialogStore = create<DialogState>((set) => ({
+  showAddDialog: false,
+  showEditDialog: false,
+  showAddCommentDialog: false,
+  // ... 6개 다이얼로그 상태
+  
+  openAddDialog: () => set({ showAddDialog: true }),
+  closeAddDialog: () => set({ showAddDialog: false }),
+  
+  // 핵심: 모든 다이얼로그를 한 번에 닫는 함수
+  closeAllDialogs: () => set({
+    showAddDialog: false,
+    showEditDialog: false,
+    showAddCommentDialog: false,
+    // ... 모든 상태 초기화
+  }),
+}))
+```
+이제 다이얼로그 관련 버그는 거의 사라졌고, 상태 동기화 문제도 해결됐다.
+
+## 깨달은 점 💡
+1. 구조가 복잡해 보이는 이유는 따로 있었다
+피드백을 받고 나서 깨달은 건, 내가 FSD 구조를 완전히 지키지 못했기 때문에 더 복잡해 보였다는 것이다.
+예를 들어, features에서 entities의 API를 직접 호출하고 있었다:
+```typescript
+// 내가 작성한 코드
+import CommentAPI from "../../../entities/comment/api/CommentAPI"
+export const useDeleteCommentFeature = () => {
+  const deleteCommentMutation = useMutation({
+    mutationFn: (id: number) => CommentAPI.deleteComment(id),
+  })
+}
+```
+이렇게 하니까 HTTP 클라이언트를 바꾸려면 entities의 API 파일뿐만 아니라 features에서 직접 호출하는 파일들도 모두 수정해야 한다. 피드백에 따르면 현재 구조에서는 약 8-15개 파일을 추가로 수정해야 하지만, 올바른 구조라면 entities의 API 파일 6-8개만 수정하면 된다고 한다.
+올바른 방식은 이런 거였다:
+```typescript
+// entities에서 훅을 제공하고
+export const useDeleteComment = () => useMutation({ 
+  mutationFn: (id) => CommentAPI.deleteComment(id) 
+})
+
+// features에서는 그 훅을 사용
+import { useDeleteComment } from "../../../entities/comment"
+export const useDeleteCommentFeature = () => {
+  const deleteCommentMutation = useDeleteComment()
+  // 비즈니스 로직만 여기서 처리
+}
+```
+
+2. Props Drilling 완전 제거가 생각보다 어렵다
+Zustand로 다이얼로그 상태는 깔끔하게 분리했지만, 댓글 데이터와 관련된 함수들은 여전히 props로 전달하는 부분이 남아있다. 어떤 상태는 전역으로 관리하고, 어떤 상태는 로컬로 두어야 하는지에 대한 명확한 기준이 부족했던 것 같다.
+특히 댓글 입력 폼이나 선택된 댓글 같은 단기간의 UI 상태까지 전역으로 관리할 필요는 없다는 걸 배웠다. 이런 건 컴포넌트 내부에서 `useState`로 관리하는 게 더 적절하다.
+
+3. 일관성이 정말 중요하다
+피드백에서 지적받은 건 내 코드에 일관성이 부족하다는 점이었다. 쿼리 키를 어떤 곳에서는 상수로 쓰고, 어떤 곳에서는 문자열 리터럴로 직접 써버렸다. 훅 네이밍도 제각각이었고, 파일 위치 규칙도 혼재되어 있었다.
+이런 작은 불일치들이 쌓이면 나중에 팀으로 작업할 때 큰 문제가 될 수 있겠다는 생각이 들었다. 특히 새로운 팀원이 합류했을 때 혼란스러워할 것 같다.
+
+## 아쉬운 점과 다음 목표 🎯
+### 아쉬운 점
+
+1. 계층 경계를 제대로 지키지 못했다
+가장 아쉬운 부분은 FSD의 핵심 규칙인 계층 경계를 완전히 지키지 못했다는 것이다. features에서 entities의 내부 구현에 직접 접근하는 코드들이 여러 곳에 있었다. 이 때문에 변경의 영향 범위가 넓어지고, 모듈 간의 결합도가 높아졌다.
+
+2. 쿼리 키 관리가 엉성했다
+TanStack Query를 사용하면서 쿼리 키 관리를 체계적으로 하지 못했다. 어떤 곳에서는 QUERY_KEYS.POSTS를 쓰고, 어떤 곳에서는 ['comments', postId]처럼 직접 배열을 작성했다. 피드백에서 제안받은 중앙화된 쿼리 키 팩토리가 정말 필요하겠다는 생각이 든다:
+```typescript
+export const queryKeys = {
+  posts: () => ['posts'] as const,
+  postsList: (params) => [...queryKeys.posts(), params] as const,
+  comments: (postId) => ['comments', postId] as const,
+}
+```
+
+3. 낙관적 업데이트 구현이 불완전했다
+현재는 queryClient.setQueryData로 캐시를 직접 조작하는 방식을 사용하고 있는데, 실패했을 때 롤백 처리가 제대로 되지 않는다. onMutate/onError/onSettled 패턴을 사용해서 더 안전하게 구현했어야 했다.
+
+4. 다이얼로그 상태 구조의 확장성 부족
+6개의 다이얼로그를 각각 boolean 변수로 관리하는 방식은 새로운 다이얼로그를 추가할 때마다 store를 수정해야 한다. 피드백에서 제안받은 키/맵 기반 구조가 훨씬 확장성이 좋아 보인다:
+```typescript
+// 현재 방식
+interface DialogState { 
+  showAddDialog: boolean
+  showEditDialog: boolean
+  // 새 다이얼로그마다 여기에 추가해야 함
+}
+
+// 개선된 방식
+interface DialogState { 
+  dialogs: Record<string, boolean>
+  open: (key: string) => void
+  close: (key: string) => void
+}
+```
+
+### 다음 목표
+즉시 해결하고 싶은 것들
+
+바렐(index.ts) 파일 도입: entities, features 폴더마다 public API를 명확하게 노출하는 index.ts 파일을 만들어야겠다. 이렇게 하면 내부 구현과 외부 인터페이스를 확실하게 분리할 수 있다.
+쿼리 키 중앙화: shared/api/queryKeys.ts 파일을 만들어서 모든 쿼리 키를 한 곳에서 관리하고 싶다. 이렇게 하면 키 변경이나 캐시 무효화 로직을 훨씬 쉽게 관리할 수 있을 것 같다.
+features → entities 의존성 정리: 현재 features에서 직접 API를 호출하는 부분들을 모두 찾아서 entities의 public 훅을 사용하도록 수정하겠다.
+
+한 달 안에 달성하고 싶은 것들
+
+낙관적 업데이트 패턴 표준화: onMutate/onError/onSettled 패턴으로 모든 mutation을 표준화하고, 실패 시 안전한 롤백이 가능하도록 구현하고 싶다.
+ESLint 규칙으로 아키텍처 보호: import/no-restricted-paths 같은 규칙을 도입해서 계층 위반을 CI에서 자동으로 잡아낼 수 있게 하고 싶다.
+현대적인 React 패턴 도입: Suspense와 ErrorBoundary를 도입해서 선언적인 로딩/에러 처리를 구현해보고 싶다.
+
+장기적으로 도전해보고 싶은 것들
+앞으로 더 큰 프로젝트를 할 때는 모노레포 구조로 도메인별 패키지를 분리하는 것도 고려해보고 싶다. 그리고 완전한 Props Drilling 제거를 위한 상태 분리 정책도 명확하게 정립하고 싶다.
+무엇보다 테스트를 제대로 도입해보고 싶다. 이번에는 기능 구현에만 집중했는데, 다음에는 테스트하기 쉬운 구조로 설계하는 것부터 시작해야겠다.
+
+
+## 마무리하며
+이번 과제를 통해 단순히 기능이 돌아가는 코드를 넘어서, 유지보수하기 쉽고 확장 가능한 구조에 대해 깊이 생각해볼 수 있었다. 특히 피드백을 통해 내가 놓치고 있던 부분들을 구체적으로 알 수 있어서 정말 값진 시간이었다.
+아직 부족한 점이 많지만, 이제는 "왜 이런 구조가 좋은가?"에 대한 나름의 기준이 생겼다. 변경의 영향 범위를 최소화하고, 일관된 패턴으로 개발 생산성을 높이는 것. 이게 바로 좋은 아키텍처의 핵심이라는 걸 배웠다.
+앞으로도 이런 구조적 사고를 계속 발전시켜서, 혼자서만 잘 돌아가는 코드가 아니라 팀과 함께 성장할 수 있는 코드를 작성하는 개발자가 되고 싶다.
