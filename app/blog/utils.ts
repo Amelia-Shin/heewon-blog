@@ -1,6 +1,5 @@
 import fs from "fs";
 import path from "path";
-import { fetchVelogPosts, convertVelogPostToLocalFormat } from "./velog";
 
 type Metadata = {
   title: string;
@@ -60,24 +59,27 @@ function getMDXData(dir) {
 }
 
 export async function getBlogPosts(): Promise<BlogPost[]> {
-  // Get local MDX posts
-  const localPosts = getMDXData(path.join(process.cwd(), "posts"));
+  const postsDir = path.join(process.cwd(), "posts");
 
-  // Get Velog posts if username is configured
-  const velogUsername = process.env.VELOG_USERNAME;
+  // Get local MDX posts from root posts directory
+  const localPosts = getMDXData(postsDir);
+
+  // Get Velog MDX posts from posts/velog directory
+  const velogDir = path.join(postsDir, "velog");
   let velogPosts: BlogPost[] = [];
 
-  if (velogUsername) {
-    try {
-      const rawVelogPosts = await fetchVelogPosts(velogUsername, 20);
-      velogPosts = rawVelogPosts.map(convertVelogPostToLocalFormat);
-    } catch (error) {
-      console.error("Failed to fetch Velog posts:", error);
-    }
+  if (fs.existsSync(velogDir)) {
+    velogPosts = getMDXData(velogDir);
   }
 
-  // Combine and return all posts
-  return [...localPosts, ...velogPosts];
+  // Combine and sort by date (newest first)
+  const allPosts = [...localPosts, ...velogPosts].sort((a, b) => {
+    const dateA = new Date(a.metadata.publishedAt);
+    const dateB = new Date(b.metadata.publishedAt);
+    return dateB.getTime() - dateA.getTime();
+  });
+
+  return allPosts;
 }
 
 export function formatDate(date: string, includeRelative = false) {

@@ -3,6 +3,9 @@ import { CustomMDX } from "app/components/mdx";
 import { formatDate, getBlogPosts } from "app/blog/utils";
 import { baseUrl } from "app/sitemap";
 
+// ISR: Revalidate every hour (3600 seconds)
+export const revalidate = 3600;
+
 export async function generateStaticParams() {
   let posts = await getBlogPosts();
 
@@ -60,33 +63,6 @@ export default async function Blog({ params }) {
 
   if (!post) {
     notFound();
-  }
-
-  // Redirect to Velog if it's a Velog post
-  if (post.isVelogPost && post.velogUrl) {
-    // For Velog posts, we'll show a redirect message
-    // You could also use Next.js redirect() here
-    return (
-      <section>
-        <h1 className="title font-semibold text-2xl tracking-tighter mb-4">
-          {post.metadata.title}
-        </h1>
-        <p className="text-neutral-600 dark:text-neutral-400 mb-4">
-          This post is hosted on Velog. Redirecting...
-        </p>
-        <a
-          href={post.velogUrl}
-          className="text-blue-600 dark:text-blue-400 hover:underline"
-        >
-          Click here if you are not redirected automatically
-        </a>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `window.location.href = "${post.velogUrl}";`,
-          }}
-        />
-      </section>
-    );
   }
 
   return (
