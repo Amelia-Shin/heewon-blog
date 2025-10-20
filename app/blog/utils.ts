@@ -6,6 +6,8 @@ type Metadata = {
   publishedAt: string;
   summary: string;
   image?: string;
+  tags?: string[];
+  velogUrl?: string;
 };
 
 export type BlogPost = {
@@ -29,7 +31,17 @@ function parseFrontmatter(fileContent: string) {
     let [key, ...valueArr] = line.split(": ");
     let value = valueArr.join(": ").trim();
     value = value.replace(/^['"](.*)['"]$/, "$1"); // Remove quotes
-    metadata[key.trim() as keyof Metadata] = value;
+
+    // Parse tags as array
+    if (key.trim() === "tags") {
+      try {
+        metadata.tags = JSON.parse(value);
+      } catch {
+        metadata.tags = [];
+      }
+    } else {
+      metadata[key.trim() as keyof Metadata] = value;
+    }
   });
 
   return { metadata: metadata as Metadata, content };
@@ -69,7 +81,25 @@ export async function getBlogPosts(): Promise<BlogPost[]> {
   let velogPosts: BlogPost[] = [];
 
   if (fs.existsSync(velogDir)) {
-    velogPosts = getMDXData(velogDir);
+    velogPosts = getMDXData(velogDir).map((post) => {
+      // Extract slug from velogUrl if it exists (e.g., https://velog.io/@username/slug-name -> slug-name)
+      let slug = post.slug;
+      if (post.metadata.velogUrl) {
+        const urlParts = post.metadata.velogUrl.split('/');
+        const velogSlug = urlParts[urlParts.length - 1];
+        if (velogSlug) {
+          slug = velogSlug;
+        }
+      }
+
+      return {
+        ...post,
+        slug,
+        isVelogPost: !!post.metadata.velogUrl,
+        velogUrl: post.metadata.velogUrl,
+        tags: post.metadata.tags,
+      };
+    });
   }
 
   // Combine and sort by date (newest first)

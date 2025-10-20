@@ -15,8 +15,9 @@ export async function generateStaticParams() {
 }
 
 export async function generateMetadata({ params }) {
+  const decodedSlug = decodeURIComponent(params.slug);
   let posts = await getBlogPosts();
-  let post = posts.find((post) => post.slug === params.slug);
+  let post = posts.find((post) => post.slug === decodedSlug);
   if (!post) {
     return;
   }
@@ -56,8 +57,10 @@ export async function generateMetadata({ params }) {
 }
 
 export default async function Blog({ params }) {
+  const decodedSlug = decodeURIComponent(params.slug);
   let posts = await getBlogPosts();
-  let post = posts.find((post) => post.slug === params.slug);
+
+  let post = posts.find((post) => post.slug === decodedSlug);
 
   const count = 10000;
 

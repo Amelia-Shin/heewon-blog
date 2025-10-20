@@ -20,9 +20,7 @@ export async function BlogPosts() {
           <Link
             key={post.slug}
             className="flex flex-col md:flex-row gap-4 group hover:opacity-80 transition-opacity"
-            href={post.isVelogPost ? post.velogUrl! : `/blog/${post.slug}`}
-            target={post.isVelogPost ? "_blank" : undefined}
-            rel={post.isVelogPost ? "noopener noreferrer" : undefined}
+            href={`/blog/${post.slug}`}
           >
             {post.metadata.image && (
               <div className="w-full md:w-48 h-32 relative flex-shrink-0 overflow-hidden rounded-lg bg-neutral-100 dark:bg-neutral-800">
