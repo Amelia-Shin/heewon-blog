@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { formatDate } from 'app/blog/format-date'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { BlogPost } from 'app/blog/utils'
 
 // Function to calculate reading time
@@ -35,7 +35,10 @@ function getAllCategories(posts: BlogPost[]): string[] {
 
 export function BlogPostsClient({ initialPosts }: { initialPosts: BlogPost[] }) {
   const [selectedCategory, setSelectedCategory] = useState('All')
-  const [limit, setLimit] = useState<number | null>(null)
+  const [itemsPerLoad, setItemsPerLoad] = useState(6)
+  const [displayCount, setDisplayCount] = useState(6)
+  const [isLoading, setIsLoading] = useState(false)
+  const loaderRef = useRef<HTMLDivElement>(null)
 
   const sortedPosts = initialPosts.sort((a, b) => {
     if (new Date(a.metadata.publishedAt) > new Date(b.metadata.publishedAt)) {
@@ -51,8 +54,61 @@ export function BlogPostsClient({ initialPosts }: { initialPosts: BlogPost[] }) 
     return getCategory(post) === selectedCategory
   })
 
-  const displayedPosts = limit ? filteredPosts.slice(0, limit) : filteredPosts
+  // Reset display count when category changes
+  const handleCategoryChange = (category: string) => {
+    setSelectedCategory(category)
+    setDisplayCount(itemsPerLoad)
+  }
+
+  const handleItemsPerLoadChange = (num: number) => {
+    setItemsPerLoad(num)
+    setDisplayCount(num)
+  }
+
   const totalCount = filteredPosts.length
+  const displayedPosts = filteredPosts.slice(0, displayCount)
+  const hasMore = displayCount < totalCount
+
+  // Load more posts
+  const loadMore = () => {
+    if (!hasMore || isLoading) return
+
+    setIsLoading(true)
+    // Simulate loading delay for better UX
+    setTimeout(() => {
+      setDisplayCount(prev => Math.min(prev + itemsPerLoad, totalCount))
+      setIsLoading(false)
+    }, 300)
+  }
+
+  // Intersection Observer for infinite scroll
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const first = entries[0]
+        if (first.isIntersecting && hasMore && !isLoading) {
+          loadMore()
+        }
+      },
+      { threshold: 0.1 }
+    )
+
+    const currentLoader = loaderRef.current
+    if (currentLoader) {
+      observer.observe(currentLoader)
+    }
+
+    return () => {
+      if (currentLoader) {
+        observer.unobserve(currentLoader)
+      }
+    }
+  }, [hasMore, isLoading, displayCount, itemsPerLoad])
+
+  // Reset display count when filtered posts change
+  useEffect(() => {
+    setDisplayCount(itemsPerLoad)
+  }, [selectedCategory, itemsPerLoad])
 
   return (
     <div className="space-y-6">
@@ -66,7 +122,7 @@ export function BlogPostsClient({ initialPosts }: { initialPosts: BlogPost[] }) 
           return (
             <button
               key={category}
-              onClick={() => setSelectedCategory(category)}
+              onClick={() => handleCategoryChange(category)}
               className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
                 selectedCategory === category
                   ? 'bg-neutral-900 dark:bg-neutral-100 text-white dark:text-black'
@@ -79,38 +135,26 @@ export function BlogPostsClient({ initialPosts }: { initialPosts: BlogPost[] }) 
         })}
       </div>
 
-      {/* Limit Control */}
-      <div className="flex items-center gap-3">
-        <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-          Show:
-        </label>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setLimit(null)}
-            className={`px-3 py-1 rounded text-sm ${
-              limit === null
-                ? 'bg-neutral-900 dark:bg-neutral-100 text-white dark:text-black'
-                : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700'
-            }`}
+      {/* Items Per Load Control */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <label htmlFor="items-per-load" className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+            Items per load:
+          </label>
+          <select
+            id="items-per-load"
+            value={itemsPerLoad}
+            onChange={(e) => handleItemsPerLoadChange(Number(e.target.value))}
+            className="px-3 py-2 rounded-lg text-sm font-medium bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-neutral-400 dark:focus:ring-neutral-600"
           >
-            All
-          </button>
-          {[6, 12, 24].map(num => (
-            <button
-              key={num}
-              onClick={() => setLimit(num)}
-              className={`px-3 py-1 rounded text-sm ${
-                limit === num
-                  ? 'bg-neutral-900 dark:bg-neutral-100 text-white dark:text-black'
-                  : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700'
-              }`}
-            >
-              {num}
-            </button>
-          ))}
+            <option value={6}>6</option>
+            <option value={12}>12</option>
+            <option value={24}>24</option>
+            <option value={48}>48</option>
+          </select>
         </div>
         <span className="text-sm text-neutral-500 dark:text-neutral-400">
-          Showing {displayedPosts.length} of {totalCount}
+          Showing {displayCount} of {totalCount}
         </span>
       </div>
 
@@ -177,6 +221,36 @@ export function BlogPostsClient({ initialPosts }: { initialPosts: BlogPost[] }) 
           )
         })}
       </div>
+
+      {/* Infinite Scroll Loader */}
+      <div ref={loaderRef} className="flex items-center justify-center py-8">
+        {isLoading && (
+          <div className="flex items-center gap-2 text-neutral-500 dark:text-neutral-400">
+            <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span className="text-sm font-medium">Loading more...</span>
+          </div>
+        )}
+        {!hasMore && displayCount > 0 && (
+          <div className="text-center text-neutral-500 dark:text-neutral-400">
+            <p className="text-sm font-medium">You've reached the end</p>
+          </div>
+        )}
+      </div>
+
+      {/* Manual Load More Button (fallback) */}
+      {hasMore && !isLoading && (
+        <div className="flex justify-center mt-8">
+          <button
+            onClick={loadMore}
+            className="px-6 py-3 rounded-lg text-sm font-medium bg-neutral-900 dark:bg-neutral-100 text-white dark:text-black hover:bg-neutral-800 dark:hover:bg-neutral-200 transition-all"
+          >
+            Load More
+          </button>
+        </div>
+      )}
     </div>
   )
 }
