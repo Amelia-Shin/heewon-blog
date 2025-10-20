@@ -33,15 +33,23 @@ function parseFrontmatter(fileContent: string) {
     let value = valueArr.join(": ").trim();
     value = value.replace(/^['"](.*)['"]$/, "$1"); // Remove quotes
 
+    const trimmedKey = key.trim();
+
     // Parse tags as array
-    if (key.trim() === "tags") {
+    if (trimmedKey === "tags") {
       try {
         metadata.tags = JSON.parse(value);
       } catch {
         metadata.tags = [];
       }
-    } else {
-      metadata[key.trim() as keyof Metadata] = value;
+    } else if (
+      trimmedKey === "title" ||
+      trimmedKey === "publishedAt" ||
+      trimmedKey === "summary" ||
+      trimmedKey === "image" ||
+      trimmedKey === "velogUrl"
+    ) {
+      metadata[trimmedKey] = value;
     }
   });
 
